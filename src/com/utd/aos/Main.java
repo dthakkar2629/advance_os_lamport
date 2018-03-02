@@ -1,7 +1,9 @@
 /**
  *
- * Main.java -
+ * Main.java - Entry point for Lamport's Distributed Mutual Exclusion Algorithm
  * @author: Saurav Sharma
+ *
+ * @args: <configuration filepath> <server or client> <server or client ID>
  *
  */
 
@@ -9,43 +11,35 @@ package com.utd.aos;
 
 import com.utd.aos.client.TCPClient;
 import com.utd.aos.server.TCPServer;
+import com.utd.aos.util.ReadPropertyFile;
+
+import java.io.FileInputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.util.Properties;
 
 public class Main {
 
     public static void main(String[] args) {
 
-        if(args.length > 1) {
+        if(args.length == 3) {
             try {
-                String clientOrServer = args[0];
-                int port = Integer.parseInt(args[1]);
+                String clientOrServer = args[1];
+                String filePath = args[0];
+                String clientOrServerID = args[2];
+                Properties prop = ReadPropertyFile.readProperties(filePath);
+
                 if (clientOrServer.equalsIgnoreCase("client")) {
-                    if(args.length == 3) {
-                        String serverAddress = args[2];
-                        TCPClient client = new TCPClient(serverAddress, port);
-                        Thread clientThread = client;
-                        client.start();
-                    }
-                    else    {
-                        System.out.println("Please provide servers address, separated by comma");
-                    }
+                    TCPClient client = new TCPClient(prop, clientOrServerID);
+                    client.startClient();
                 }
                 else if (clientOrServer.equalsIgnoreCase("server")){
-                    if(args.length == 3) {
-                        String directoryPath = args[2];
-                        TCPServer server = new TCPServer(port, directoryPath);
-                        Thread serverThread = new Thread(server);;
-                        serverThread.start();
-                    }
-                    else    {
-                        System.out.println("Please provide home directory path");
-                    }
+                    TCPServer server = new TCPServer(prop, clientOrServerID);
+                    server.startServer();
                 }
                 else {
                     System.out.println("Only 'server' or 'client' is accepted as valid input");
                 }
-            }
-            catch (NumberFormatException numEx) {
-                System.out.println("Please provide integer value for port number");
             }
             catch (Exception ex)    {
                 ex.printStackTrace();
@@ -53,7 +47,7 @@ public class Main {
         }
         else    {
             System.out.println("Invalid Syntax");
-            System.out.println("Usage: <server or client> <port_no> <server address for client instance>");
+            System.out.println("Usage: <property file> <server or client> <server/client id>");
         }
     }
 }

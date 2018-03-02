@@ -1,3 +1,10 @@
+/**
+ *
+ * WriteFile.java - Read the last line of a given file by TCPServer
+ * @author  Saurav Sharma
+ *
+ */
+
 package com.utd.aos.util;
 
 import java.io.BufferedReader;
@@ -22,23 +29,22 @@ public class ReadFile implements Callable {
 
             BufferedReader bufferedReader = new BufferedReader(fileReader);
             if (bufferedReader == null) {
-                System.out.println("can't read file: " + fileName);
                 return "can't read file: " + fileName;
             }
-            String line = bufferedReader.readLine();;
+            String line = bufferedReader.readLine();
             while (line != null) {
                 lastLine = line;
                 line = bufferedReader.readLine();
             }
 
             // Always close files.
-            System.out.println(lastLine);
             bufferedReader.close();
             return lastLine;
         }
         catch(Exception ex) {
-            System.out.println("Error occurred while reading file " + fileName);
-            return "Error occurred while reading file " + fileName;
+            ex.printStackTrace();
+            return String.valueOf(ex.getStackTrace());
+//            return "Error occurred while reading file " + fileName;
         }
     }
 }

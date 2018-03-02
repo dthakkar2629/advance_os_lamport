@@ -1,12 +1,13 @@
 /**
  *
- * TCPServer.java -
+ * TCPServer.java - Server code
  * @author  Saurav Sharma
  *
  */
 
 package com.utd.aos.server;
 
+import com.utd.aos.util.GetAllFiles;
 import com.utd.aos.util.ReadFile;
 import com.utd.aos.util.WriteFile;
 
@@ -14,54 +15,90 @@ import java.io.*;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.net.SocketTimeoutException;
+import java.time.LocalTime;
+import java.util.LinkedHashMap;
+import java.util.Map;
+import java.util.Properties;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 
-public class TCPServer implements Runnable{
+public class TCPServer {
 
     private ServerSocket serverSocket;
-    private int clientConnected;
     private String directoryPath;
+    private static Map ClientList;
+    private int noOfClients;
+    private final String ServerID;
 
-    public TCPServer(int port, String directoryPath) throws IOException {
-        this.serverSocket = new ServerSocket(port);
-        this.clientConnected = 0;
-        this.directoryPath = directoryPath;
+    public TCPServer(Properties properties, String serverID) throws IOException {
+        this.serverSocket = new ServerSocket(Integer.valueOf(properties.getProperty("serverport")));
+        this.directoryPath = properties.getProperty("directoryserver" + serverID);
+        ClientList = new LinkedHashMap();
+        this.noOfClients = 0;
+        this.ServerID = serverID;
     }
 
-    public void run()   {
+    /**
+     * Start the server to start listening from clients
+     */
+    public void startServer()   {
+
+        System.out.println("Starting Server " + ServerID);
+        System.out.println("-------------------------------------------------------");
+        System.out.println("Waiting for client on port " +
+                serverSocket.getLocalPort() + "...");
+        System.out.println();
+        ExecutorService pool = Executors.newFixedThreadPool(3);
         while(true) {
+
             try {
-                System.out.println("Waiting for client on port " +
-                        serverSocket.getLocalPort() + "...");
-
                 Socket server = serverSocket.accept();
-                clientConnected++;
-
-                System.out.println("Just connected to " + server.getRemoteSocketAddress());
+                String clientIP = server.getInetAddress().toString().substring(1);
                 DataInputStream in = new DataInputStream(server.getInputStream());
-
-                System.out.println(in.readUTF());
-
                 DataOutputStream out = new DataOutputStream(server.getOutputStream());
-                ExecutorService pool = Executors.newFixedThreadPool(3);
-                Callable<String> readFileCallable = new ReadFile(directoryPath, "file_1.txt");
-                Callable<Boolean> writeFileCallable = new WriteFile(directoryPath, "file_1.txt", "testing");
 
-                Future<Boolean> futureWrite = pool.submit(writeFileCallable);
-                Boolean flag = futureWrite.get();
-                out.writeUTF("Updated file : " + flag);
-                Future<String> future = pool.submit(readFileCallable);
-                String msg = future.get();
-                System.out.println("File: " + msg);
-                out.writeUTF(msg);
-                out.writeUTF("Thank you for connecting to " + server.getLocalSocketAddress()
-                        + "\nGoodbye!");
+                String msg = in.readUTF();
+                System.out.println("message received: " + msg + " from " + clientIP);
 
-                System.out.println("Total number of client connected: " + clientConnected);
-                // server.close();
+                int clientID = Integer.parseInt(msg.substring(msg.indexOf("Client ID: ") + 11, msg.indexOf("Client ID: ") + 12).trim());
+
+                if (!ClientList.containsKey(clientID)) {
+                    ClientList.put(clientID, clientIP);
+                }
+
+                // To handle READ request from Clients
+                if (msg.contains("READ: ")) {
+                    String fileName = msg.split(";")[1].split(":")[1].trim();
+                    Callable<String> readFileCallable = new ReadFile(directoryPath, fileName);
+                    Future<String> futureRead = pool.submit(readFileCallable);
+                    String content = futureRead.get();
+                    out.writeUTF(content);
+                }
+                // To handle WRITE request from Clients
+                else if (msg.contains("WRITE: ")) {
+                    String fileName = msg.split(";")[1].split(":")[1].trim();
+                    Callable<Boolean> writeFileCallable = new WriteFile(directoryPath, fileName,
+                            clientID + ",  " + msg.split(";")[2].split(":")[1].trim());
+                    Future<Boolean> futureWrite = pool.submit(writeFileCallable);
+                    Boolean flag = futureWrite.get();
+                    if (flag) {
+                        out.writeUTF("File Successfully Updated");
+                    } else {
+                        out.writeUTF("File Not Updated");
+                    }
+                }
+                // To handle ENQUIRY request from Clients
+                else if (msg.contains("ENQUIRY")) {
+                    Callable<String> getAllFileCallable = new GetAllFiles(directoryPath);
+                    Future<String> futureRead = pool.submit(getAllFileCallable);
+                    String content = futureRead.get();
+                    out.writeUTF(content);
+                }
+                else    {
+                    out.writeUTF("Operation not supported");
+                }
 
             } catch (SocketTimeoutException s) {
                 System.out.println("Socket timed out!");
@@ -70,9 +107,10 @@ public class TCPServer implements Runnable{
                 e.printStackTrace();
                 break;
             } catch (Exception ex)  {
-                ex.printStackTrace();;
+                ex.printStackTrace();
                 break;
             }
         }
+        pool.shutdown();
     }
 }
